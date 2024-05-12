@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 from fastapi_pagination import Page, Params
-
+import numpy as np
 import psycopg2
 import hashlib
 
@@ -119,21 +119,6 @@ async def update_user(login: str, login_new: str, password: str, salt: str, name
     return {"STATUS": status}
 
 
-# @app.delete("/delete_user/{login}")
-# async def delete_user(login : str):
-#     cursor = conn.cursor()
-#
-#     status = "YES"
-#     # try:
-#     #     cursor.execute(f"DELETE FROM users WHERE login = \'{login}\'")
-#     # except:
-#     #     status = "NO"
-#
-#     cursor.execute(f"DELETE FROM users WHERE login = \'{login}\'")
-#     conn.commit()
-#     cursor.close()
-#
-#     return {"STATUS": status}
 
 
 # --Client_type--discount_--time_--job_title
@@ -321,23 +306,178 @@ async def get_record_or_eployee(table: str, id: int):
                       "name": i[3],
                       "job_title_id": [i[4], job_id],
                       "exist": i[5]})
+    cursor.close()
+    cursor_service.close()
+    cursor_user.close()
+    cursor_employe.close()
+    cursor_time.close()
+    cursor_job_title.close()
     return a
 
 
-@app.post("/add_record_or_eployee/{table}/{")
-async def add_record_or_eployee(table: str):
+@app.post("/add_record_or_eployee/{table}/{service_id_or_login}/{user_id_or_password}/{employee_id_or_name}/{time_id_or_job_title_id}/{date_record_or_exist}/{salt}")
+async def add_record_or_eployee(table: str, service_id_or_login: str, user_id_or_password: str, employee_id_or_name: str, time_id_or_job_title_id: str, date_record_or_exist: str, salt: str):
     cursor = conn.cursor()
-    cursor_service = conn.cursor()
-    cursor_user = conn.cursor()
-    cursor_employe = conn.cursor()
-    cursor_time = conn.cursor()
-    cursor_job_title = conn.cursor()
     tabl_id = ""
-    a = []
+
+
+
     if table == "record_":
         tabl_id = "id_record"
+        rec = (service_id_or_login, user_id_or_password , employee_id_or_name, time_id_or_job_title_id, date_record_or_exist)
+        cursor.execute(
+            f"INSERT INTO {table} (service_id, user_id, employee_id, time_id, date_record) VALUES (%s, %s, %s, %s, %s)",
+            rec)
+
 
     elif table == "employee_":
         tabl_id = "id_employee"
+        passwd = user_id_or_password.encode()
+        solt = salt.encode()
+        dk = hashlib.pbkdf2_hmac('sha256', passwd, solt, 100000)
+        empl = (service_id_or_login, dk.hex(), employee_id_or_name, time_id_or_job_title_id, date_record_or_exist)
+        cursor.execute(
+            f"INSERT INTO {table} (login, password, name, job_title_id, exist) VALUES (%s, %s, %s, %s, %s)",
+            empl)
+    conn.commit()
+    cursor.close()
 
+    return {"STATUS": "YES"}
+
+@app.put("/update_record_or_eployee/{table}/{id}/{service_id_or_login}/{user_id_or_password}/{employee_id_or_name}/{time_id_or_job_title_id}/{date_record_or_exist}/{salt}")
+async def update_record_or_eployee(table: str, id: str, service_id_or_login: str, user_id_or_password: str, employee_id_or_name: str, time_id_or_job_title_id: str, date_record_or_exist: str, salt: str):
+    cursor = conn.cursor()
+    tabl_id = ""
+
+    if table == "record_":
+        tabl_id = "id_record"
+        cursor.execute(f"UPDATE {table} SET service_id = {service_id_or_login}, user_id = {user_id_or_password}, employee_id = {employee_id_or_name}, time_id = {time_id_or_job_title_id}, date_record = \'{date_record_or_exist}\' WHERE {tabl_id} = {id}")
+
+
+    elif table == "employee_":
+        tabl_id = "id_employee"
+        passwd = user_id_or_password.encode()
+        solt = salt.encode()
+        dk = hashlib.pbkdf2_hmac('sha256', passwd, solt, 100000)
+        cursor.execute(f"UPDATE {table} SET login = \'{service_id_or_login}\', password = \'{dk.hex()}\', name = \'{employee_id_or_name}\', job_title_id = {time_id_or_job_title_id}, exist = {date_record_or_exist} WHERE {tabl_id} = {id}")
+
+    conn.commit()
+    cursor.close()
+
+    return {"STATUS": "YES"}
+
+
+@app.put("/delete_record_or_eployee/{table}/{id}/{dopparam}")
+async def delete_record_or_eployee(table: str, id: str, dopparam: str):
+    cursor = conn.cursor()
+    tabl_id = ""
+
+    if table == "record_":
+        tabl_id = "id_record"
+        cursor.execute(f"DELETE FROM {table} {tabl_id} WHERE {tabl_id} = {id}")
+
+    elif table == "employee_":
+        tabl_id = "id_employee"
+        if (dopparam == "1"):
+            cursor.execute(f"DELETE FROM {table} {tabl_id} WHERE {tabl_id} = {id}")
+        else:
+            cursor.execute(
+                f"UPDATE {table} SET exist = false WHERE {tabl_id} = {id}")
+
+    conn.commit()
+    cursor.close()
+
+    return {"STATUS": "YES"}
+
+
+#--services_
+
+@app.get("/getServices")
+async def getServices(params: Params = Depends()):
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM services_")
+    a = []
+    for i in cursor.fetchall():
+        a.append(i)
+
+    chunks = [a[i:i + params.size] for i in range(0, len(a), params.size)]
+    cursor.close()
+    return chunks[params.page - 1]
+
+@app.get("/getServices_id/{id}")
+async def getServicesId(id: str):
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM services_ where id_service = {id}")
+    a = []
+    for i in cursor.fetchall():
+        a.append(i)
+    cursor.close()
     return a
+
+@app.post("/addServices/{name}/{coast}")
+async def addServicesId(name: str, coast:str):
+    cursor = conn.cursor()
+    cursor.execute(f"INSERT INTO services_ (name, coast) values (\'{name}\', \'{coast}\')")
+    conn.commit()
+    cursor.close()
+    return {"STATUS": "YES"}
+
+
+@app.put("/updateServices/{id}/{name}/{coast}")
+async def updateServicesId(id:str, name: str, coast:str):
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE services_ set name = \'{name}\', coast = \'{coast}\' where id_service = {id}")
+    conn.commit()
+    cursor.close()
+    return {"STATUS": "YES"}
+
+@app.delete("/deleteServices/{id}")
+async def deleteServicesId(id:str):
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM services_ WHERE  id_service = {id}")
+    conn.commit()
+    cursor.close()
+    return {"STATUS": "YES"}
+
+#--check_----
+
+@app.get("/get_check/{id}")
+async def getcheck(id:str):
+    cursor = conn.cursor()
+    if id == "-1":
+        cursor.execute(f"SELECT * FROM check_")
+    else:
+        cursor.execute(f"SELECT * FROM check_ where id_check = {id}")
+
+    a = []
+    for i in cursor.fetchall():
+        a.append(i)
+    cursor.close()
+    return a
+
+
+@app.post("/add_check/{record_id}/{coast}/{payment}")
+async def add_check(record_id :str, coast: str, payment: str):
+    cursor = conn.cursor()
+    cursor.execute(f"INSERT INTO check_ (record_id, coast, payment) values ({record_id}, {coast}, \'{payment}\')")
+    conn.commit()
+    cursor.close()
+    return {"STATUS": "YES"}
+
+
+@app.put("/update_check/{id}/{record_id}/{coast}/{payment}")
+async def update_check(id: str, record_id :str, coast: str, payment: str):
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE check_ set record_id = {record_id}, coast = {coast}, payment = \'{payment}\' where id_check = {id}")
+    conn.commit()
+    cursor.close()
+    return {"STATUS": "YES"}
+
+
+@app.put("/delete_check/{id}")
+async def delete_check(id: str):
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM check_ WHERE  id_check = {id}")
+    conn.commit()
+    cursor.close()
+    return {"STATUS": "YES"}
