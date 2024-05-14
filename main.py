@@ -11,6 +11,13 @@ conn = psycopg2.connect(dbname="Magazine", user="root", password="NasSidAdmin789
 # conn.close()
 name = "Time"
 
+@app.get("/getHash/{password}/{salt}")
+async def getHash(password: str, salt: str):
+    passwd = password.encode()
+    solt = salt.encode()
+    dk = hashlib.pbkdf2_hmac('sha256', passwd, solt, 100000)
+    return dk.hex()
+
 
 @app.get("/")
 async def root(
@@ -29,10 +36,6 @@ async def root(
     return a
 
 
-# @app.get("/hello/{name}")
-# async def say_hello(name: str):
-#     return {"message": f"Hello {name}"}
-
 # --USERS---------------------------------------
 @app.post("/register_user/{login}/{password}/{name}/{salt}")
 async def register_user(login: str, password: str, name: str, salt: str):
@@ -50,7 +53,7 @@ async def register_user(login: str, password: str, name: str, salt: str):
     conn.commit()
     print("Данные добавлены")
     cursor.close()
-    return {"message": f"Hello {name}"}
+    return {"STATUS": "YES"}
 
 
 @app.get("/auth/{login}/{password}/{salt}")
@@ -64,43 +67,48 @@ async def authorization_user(login: str, password: str, salt: str):
     try:
         return {"user": cursor.fetchall()[0][1], "login": login}
     except IndexError:
-        return {"user": "NO", "login": "NO"}
+        return {"STATUS": "NO"}
 
 
 @app.get("/get_user/{login}")
 async def get_user(login: str):
     cursor = conn.cursor()
-    cursor_client_type = conn.cursor()
-    cursor_discount = conn.cursor()
     client_type = ""
     discount = ""
+    a = []
+    if login == "none":
+        cursor.execute(f"SELECT * FROM users")
+        for i in cursor.fetchall():
+            a.append({
+                "id_user": i[0],
+                "login": i[1],
+                "password": i[2],
+                "name": i[3],
+                "client_type_id": i[4],
+                "discount_id": i[5],
+                "visit_numbers": i[6],
+                "exist": i[7]
+            })
+    else:
+        cursor.execute(f"SELECT * FROM users where login = \'{login}\'")
+        for i in cursor.fetchall():
+            a.append({
+                "id_user": i[0],
+                "login": i[1],
+                "password": i[2],
+                "name": i[3],
+                "client_type_id": i[4],
+                "discount_id": i[5],
+                "visit_numbers": i[6],
+                "exist": i[7]
+            })
 
-    cursor.execute(f"SELECT * FROM users where login = \'{login}\'")
-    a = cursor.fetchall()
-
-    cursor_client_type.execute(f"SELECT name FROM client_type where id_client_type = \'{a[0][4]}\'")
-    client_type = cursor_client_type.fetchall()[0][0]
-
-    cursor_discount.execute(f"SELECT value FROM discount_ where id_discount = \'{a[0][5]}\'")
-    discount = cursor_discount.fetchall()[0][0]
-
-    cursor.close()
-    cursor_discount.close()
-    cursor_client_type.close()
-    return {
-        "id": a[0][0],
-        "login": a[0][1],
-        "password": a[0][2],
-        "name": a[0][3],
-        "client_type": [client_type, a[0][4]],
-        "discount": [discount, a[0][5]],
-        "visit_number": a[0][6],
-        "exist": a[0][7]
-    }
+        cursor.close()
+    return a
 
 
-@app.put("/update_user/{login}/{login_new}/{password}/{name}/{salt}/{client_type}/{discount_id}/{exist}")
-async def update_user(login: str, login_new: str, password: str, salt: str, name: str, client_type: int,
+@app.put("/update_user/{id}/{login}/{password}/{name}/{salt}/{client_type}/{discount_id}/{exist}")
+async def update_user(id: str,login: str,  password: str, salt: str, name: str, client_type: int,
                       discount_id: int, exist: bool):
     cursor = conn.cursor()
     passwd = password.encode()
@@ -110,15 +118,13 @@ async def update_user(login: str, login_new: str, password: str, salt: str, name
     status = "YES"
     try:
         cursor.execute(
-            f"UPDATE users SET login = \'{login_new}\', password = \'{dk.hex()}\', name = \'{name}\', client_type_id = \'{client_type}\', discount_id = \'{discount_id}\', exist = \'{exist}\' where login = \'{login}\'")
+            f"UPDATE users SET login = \'{login}\', password = \'{dk.hex()}\', name = \'{name}\', client_type_id = \'{client_type}\', discount_id = \'{discount_id}\', exist = \'{exist}\' where id_user = \'{id}\'")
     except:
         status = "NO"
     conn.commit()
     cursor.close()
 
     return {"STATUS": status}
-
-
 
 
 # --Client_type--discount_--time_--job_title
@@ -146,9 +152,38 @@ async def getFourTable(table: str, id: int):
         cursor.execute(f"SELECT * FROM {table} where {tabl_id} = \'{id}\'")
     a = []
     for i in cursor.fetchall():
-        a.append({tabl_id: i[1::][0]})
+        a.append(i)
     cursor.close()
-    return a
+
+    b = []
+
+    for j in a:
+        if table == "client_type":
+            b.append({
+                "id_client_type": j[0],
+                "name": j[1]
+            })
+
+
+        elif table == "discount_":
+            b.append({
+                "id_discount": j[0],
+                "value": j[1]
+            })
+
+        elif table == "time_":
+            b.append({
+                "id_time": j[0],
+                "time": j[1]
+            })
+
+        elif table == "job_title":
+            b.append({
+                "id_job_title": j[0],
+                "name": j[1]
+            })
+
+    return b
 
 
 @app.post("/add/{table}/{input_text}")
@@ -199,7 +234,7 @@ async def delFourTable(table: str, id: str):
     return {"status": "YES"}
 
 
-@app.put("/update/{table}/{id}/value")
+@app.put("/update/{table}/{id}/{value}")
 async def updateFourTable(table: str, id: str, value: str):
     cursor = conn.cursor()
     tabl_id = ""
@@ -285,10 +320,10 @@ async def get_record_or_eployee(table: str, id: int):
                     time_id = t[1]
 
             a.append({"id_record": i[0],
-                      "service_id": [i[1], service_id],
-                      "user_id": [i[2], user_id],
-                      "employee_id": [i[3], employee_id],
-                      "time_id": [i[4], time_id],
+                      "service_id": i[1],
+                      "user_id": i[2],
+                      "employee_id": i[3],
+                      "time_id": i[4],
                       "date_record": i[5]})
 
     elif table == "employee_":
@@ -304,7 +339,7 @@ async def get_record_or_eployee(table: str, id: int):
                       "login": i[1],
                       "password": i[2],
                       "name": i[3],
-                      "job_title_id": [i[4], job_id],
+                      "job_title_id": i[4],
                       "exist": i[5]})
     cursor.close()
     cursor_service.close()
@@ -315,16 +350,18 @@ async def get_record_or_eployee(table: str, id: int):
     return a
 
 
-@app.post("/add_record_or_eployee/{table}/{service_id_or_login}/{user_id_or_password}/{employee_id_or_name}/{time_id_or_job_title_id}/{date_record_or_exist}/{salt}")
-async def add_record_or_eployee(table: str, service_id_or_login: str, user_id_or_password: str, employee_id_or_name: str, time_id_or_job_title_id: str, date_record_or_exist: str, salt: str):
+@app.post(
+    "/add_record_or_eployee/{table}/{service_id_or_login}/{user_id_or_password}/{employee_id_or_name}/{time_id_or_job_title_id}/{date_record_or_exist}/{salt}")
+async def add_record_or_eployee(table: str, service_id_or_login: str, user_id_or_password: str,
+                                employee_id_or_name: str, time_id_or_job_title_id: str, date_record_or_exist: str,
+                                salt: str):
     cursor = conn.cursor()
     tabl_id = ""
 
-
-
     if table == "record_":
         tabl_id = "id_record"
-        rec = (service_id_or_login, user_id_or_password , employee_id_or_name, time_id_or_job_title_id, date_record_or_exist)
+        rec = (
+        service_id_or_login, user_id_or_password, employee_id_or_name, time_id_or_job_title_id, date_record_or_exist)
         cursor.execute(
             f"INSERT INTO {table} (service_id, user_id, employee_id, time_id, date_record) VALUES (%s, %s, %s, %s, %s)",
             rec)
@@ -344,14 +381,19 @@ async def add_record_or_eployee(table: str, service_id_or_login: str, user_id_or
 
     return {"STATUS": "YES"}
 
-@app.put("/update_record_or_eployee/{table}/{id}/{service_id_or_login}/{user_id_or_password}/{employee_id_or_name}/{time_id_or_job_title_id}/{date_record_or_exist}/{salt}")
-async def update_record_or_eployee(table: str, id: str, service_id_or_login: str, user_id_or_password: str, employee_id_or_name: str, time_id_or_job_title_id: str, date_record_or_exist: str, salt: str):
+
+@app.put(
+    "/update_record_or_eployee/{table}/{id}/{service_id_or_login}/{user_id_or_password}/{employee_id_or_name}/{time_id_or_job_title_id}/{date_record_or_exist}/{salt}")
+async def update_record_or_eployee(table: str, id: str, service_id_or_login: str, user_id_or_password: str,
+                                   employee_id_or_name: str, time_id_or_job_title_id: str, date_record_or_exist: str,
+                                   salt: str):
     cursor = conn.cursor()
     tabl_id = ""
 
     if table == "record_":
         tabl_id = "id_record"
-        cursor.execute(f"UPDATE {table} SET service_id = {service_id_or_login}, user_id = {user_id_or_password}, employee_id = {employee_id_or_name}, time_id = {time_id_or_job_title_id}, date_record = \'{date_record_or_exist}\' WHERE {tabl_id} = {id}")
+        cursor.execute(
+            f"UPDATE {table} SET service_id = {service_id_or_login}, user_id = {user_id_or_password}, employee_id = {employee_id_or_name}, time_id = {time_id_or_job_title_id}, date_record = \'{date_record_or_exist}\' WHERE {tabl_id} = {id}")
 
 
     elif table == "employee_":
@@ -359,7 +401,8 @@ async def update_record_or_eployee(table: str, id: str, service_id_or_login: str
         passwd = user_id_or_password.encode()
         solt = salt.encode()
         dk = hashlib.pbkdf2_hmac('sha256', passwd, solt, 100000)
-        cursor.execute(f"UPDATE {table} SET login = \'{service_id_or_login}\', password = \'{dk.hex()}\', name = \'{employee_id_or_name}\', job_title_id = {time_id_or_job_title_id}, exist = {date_record_or_exist} WHERE {tabl_id} = {id}")
+        cursor.execute(
+            f"UPDATE {table} SET login = \'{service_id_or_login}\', password = \'{dk.hex()}\', name = \'{employee_id_or_name}\', job_title_id = {time_id_or_job_title_id}, exist = {date_record_or_exist} WHERE {tabl_id} = {id}")
 
     conn.commit()
     cursor.close()
@@ -404,18 +447,28 @@ async def getServices(params: Params = Depends()):
     cursor.close()
     return chunks[params.page - 1]
 
+
 @app.get("/getServices_id/{id}")
-async def getServicesId(id: str):
+async def getServicesId(id: int):
     cursor = conn.cursor()
-    cursor.execute(f"SELECT * FROM services_ where id_service = {id}")
+    if id > 500:
+        cursor.execute("SELECT * FROM services_")
+    else:
+        cursor.execute(f"SELECT * FROM services_ where id_service = {id}")
     a = []
     for i in cursor.fetchall():
-        a.append(i)
+        a.append({
+            "id_service": i[0],
+            "name": i[1],
+            "coast": i[2]
+        })
     cursor.close()
     return a
 
+
+
 @app.post("/addServices/{name}/{coast}")
-async def addServicesId(name: str, coast:str):
+async def addServicesId(name: str, coast: str):
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO services_ (name, coast) values (\'{name}\', \'{coast}\')")
     conn.commit()
@@ -424,25 +477,27 @@ async def addServicesId(name: str, coast:str):
 
 
 @app.put("/updateServices/{id}/{name}/{coast}")
-async def updateServicesId(id:str, name: str, coast:str):
+async def updateServicesId(id: str, name: str, coast: str):
     cursor = conn.cursor()
     cursor.execute(f"UPDATE services_ set name = \'{name}\', coast = \'{coast}\' where id_service = {id}")
     conn.commit()
     cursor.close()
     return {"STATUS": "YES"}
 
+
 @app.delete("/deleteServices/{id}")
-async def deleteServicesId(id:str):
+async def deleteServicesId(id: str):
     cursor = conn.cursor()
     cursor.execute(f"DELETE FROM services_ WHERE  id_service = {id}")
     conn.commit()
     cursor.close()
     return {"STATUS": "YES"}
 
+
 #--check_----
 
 @app.get("/get_check/{id}")
-async def getcheck(id:str):
+async def getcheck(id: str):
     cursor = conn.cursor()
     if id == "-1":
         cursor.execute(f"SELECT * FROM check_")
@@ -451,13 +506,18 @@ async def getcheck(id:str):
 
     a = []
     for i in cursor.fetchall():
-        a.append(i)
+        a.append({
+            "id_check": i[0],
+            "record_id": i[1],
+            "coast": i[2],
+            "payment": i[3]
+        })
     cursor.close()
     return a
 
 
 @app.post("/add_check/{record_id}/{coast}/{payment}")
-async def add_check(record_id :str, coast: str, payment: str):
+async def add_check(record_id: str, coast: str, payment: str):
     cursor = conn.cursor()
     cursor.execute(f"INSERT INTO check_ (record_id, coast, payment) values ({record_id}, {coast}, \'{payment}\')")
     conn.commit()
@@ -466,9 +526,10 @@ async def add_check(record_id :str, coast: str, payment: str):
 
 
 @app.put("/update_check/{id}/{record_id}/{coast}/{payment}")
-async def update_check(id: str, record_id :str, coast: str, payment: str):
+async def update_check(id: str, record_id: str, coast: str, payment: str):
     cursor = conn.cursor()
-    cursor.execute(f"UPDATE check_ set record_id = {record_id}, coast = {coast}, payment = \'{payment}\' where id_check = {id}")
+    cursor.execute(
+        f"UPDATE check_ set record_id = {record_id}, coast = {coast}, payment = \'{payment}\' where id_check = {id}")
     conn.commit()
     cursor.close()
     return {"STATUS": "YES"}
