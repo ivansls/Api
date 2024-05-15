@@ -445,7 +445,15 @@ async def getServices(params: Params = Depends()):
 
     chunks = [a[i:i + params.size] for i in range(0, len(a), params.size)]
     cursor.close()
-    return chunks[params.page - 1]
+
+    b = []
+    for j in chunks[params.page - 1]:
+        b.append({
+            "id_service": j[0],
+            "name": j[1],
+            "coast": j[2]
+        })
+    return b
 
 
 @app.get("/getServices_id/{id}")
